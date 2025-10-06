@@ -6,7 +6,7 @@
 static const float KP = 0.12f;
 static const float KI = 0.0008f;
 static const float KD = 0.02f;
-static const float SORTIE_MAX = 0.35f;
+static const float SORTIE_MAX = 0.5f;
 static const float INTEGRAL_MAX = 2000.0f;
 
 static inline float clamp(float x, float a, float b) {

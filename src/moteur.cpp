@@ -1,7 +1,6 @@
 #include <LibRobus.h>
 #include "moteur.h"
 
-// Si ta roue droite est câblée à l’envers, mets 1 :
 #define MOTOR_RIGHT_INVERTED 0
 
 static inline float clamp(float x, float a, float b) {
@@ -12,27 +11,32 @@ static inline float clamp(float x, float a, float b) {
 
 void MOTEUR_Init() {
   BoardInit();
-  MOTOR_SetSpeed(LEFT,  0.0f);
-  MOTOR_SetSpeed(RIGHT, 0.0f);
+  MOTOR_SetSpeed(LEFT, 0);
+  MOTOR_SetSpeed(RIGHT, 0);
 }
 
 void MOTEUR_Stop() {
-  MOTOR_SetSpeed(LEFT,  0.0f);
-  MOTOR_SetSpeed(RIGHT, 0.0f);
+  MOTOR_SetSpeed(LEFT, 0);
+  MOTOR_SetSpeed(RIGHT, 0);
 }
 
 void MOTEUR_Drive(float base_speed, float correction) {
-  // vitesses avant clamp
   float vg = base_speed - correction;
   float vd = base_speed + correction;
-
-  // borne dans [-1, 1]
   vg = clamp(vg, -1.0f, 1.0f);
   vd = clamp(vd, -1.0f, 1.0f);
-
-  // inversion éventuelle de la droite
   if (MOTOR_RIGHT_INVERTED) vd = -vd;
 
-  MOTOR_SetSpeed(LEFT,  vg);
+  MOTOR_SetSpeed(LEFT, vg);
   MOTOR_SetSpeed(RIGHT, vd);
+}
+
+void MOTEUR_TourneGauche(float vitesse) {
+  MOTOR_SetSpeed(LEFT, -vitesse);
+  MOTOR_SetSpeed(RIGHT, vitesse);
+}
+
+void MOTEUR_TourneDroite(float vitesse) {
+  MOTOR_SetSpeed(LEFT, vitesse);
+  MOTOR_SetSpeed(RIGHT, -vitesse);
 }

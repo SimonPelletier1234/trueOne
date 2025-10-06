@@ -4,8 +4,6 @@
 #include "capteur.h"
 #include "pid.h"
 
-//test push for laurent
-
 static const float VITESSE_BASE   = 0.50f;
 static const long  DISTANCE_TICKS = 1800000;
 

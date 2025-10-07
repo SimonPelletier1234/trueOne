@@ -4,21 +4,21 @@
 #include "capteur.h"
 #include "pid.h"
 
-// ===== Réglages déplacement =====
-static const float VITESSE_BASE = 0.20f;    // vitesse d'avance PID (0..1)
-static const long  DISTANCE_TICKS_MAX = 25000; // distance max si pas d'obstacle
+// --- Réglages déplacement ---
+static const float VITESSE_BASE       = 0.25f;
+static const long  DISTANCE_TICKS_MAX = 25000;
 
-// ===== Réaction aux obstacles =====
-static const float VITESSE_TOURNE = 0.10f;  // vitesse pour pivoter
-static const int   TOURNE_MS = 650;         // durée d'un virage (~90°) à calibrer
-static const float VITESSE_RECULE = 0.10f;  // vitesse pour reculer
-static const int   RECULE_MS = 300;         // durée de recul avant de tourner quand c'est bloqué en face
+// --- Réaction obstacles ---
+static const float VITESSE_TOURNE = 0.20f;
+static const int   TOURNE_MS      = 900;   // ~90°
+static const float VITESSE_RECULE = 0.10f;
+static const int   RECULE_MS      = 200;
 
-// Anti-glitch capteurs (valider N lectures d'affilée)
-static const int DETECT_N = 3;
-static const int DETECT_DT_MS = 5;
+// --- Anti-glitch capteurs (N lectures identiques d’affilée) ---
+static const int DETECT_N      = 3;
+static const int DETECT_DT_MS  = 5;
 
-// ---- Helpers ----
+// Helpers
 static void reculer_ms(int ms) {
   MOTOR_SetSpeed(LEFT,  -VITESSE_RECULE);
   MOTOR_SetSpeed(RIGHT, -VITESSE_RECULE);
@@ -26,65 +26,60 @@ static void reculer_ms(int ms) {
   MOTEUR_Stop();
 }
 
-static int Find_Mur_stable() {
-  int count = 0;
-  int last = Find_Mur();
+static int CAPTEUR_DetecterMur_Stable() {
+  int identiques = 0;
+  int dernier = Find_Mur();
   for (int i = 0; i < DETECT_N; i++) {
-    int m = Find_Mur();
-    if (m == last) count++; else { count = 0; last = m; }
+    int etat = Find_Mur();
+    if (etat == dernier) {
+      identiques++;
+    } else {
+      identiques = 0;
+      dernier = etat;
+    }
     delay(DETECT_DT_MS);
   }
-  return (count >= DETECT_N) ? last : 0;
+  return (identiques >= DETECT_N) ? dernier : 0;
 }
 
 void setup() {
   Serial.begin(9600);
   MOTEUR_Init();
   CAPTEUR_Init();
-  Serial.println("Robot PID + evitemment actif (LOW = detecte)");
   delay(300);
 }
 
 void loop() {
-  // 1) Avance droit avec PID jusqu'à distance max OU détection IR
-  Serial.println("➡️ Avance PID");
+  // Avance droit jusqu’à la distance cible ou détection d’obstacle
   PID_AvanceDroit(VITESSE_BASE, DISTANCE_TICKS_MAX);
 
-  // 2) Détection stable avant réaction
-  int mur = Find_Mur_stable();
-  Serial.print("Mur detecte = "); Serial.println(mur);
+  MOTEUR_Stop();
+  delay(500);
+
+  int mur = CAPTEUR_DetecterMur_Stable();
 
   if (mur == 0) {
-    // Si on est sorti par distance (pas d'obstacle), on peut repartir
-    // (ou faire autre chose). Ici: petite pause et on repart.
-    MOTEUR_Stop();
-    delay(150);
-    return; // boucle et repart
+    delay(300); // repart tout droit
+    return;
   }
 
-  // 3) Réaction selon le côté détecté
-  if (mur == 1) {
-    // Obstacle à GAUCHE -> pivote à DROITE
-    Serial.println("Obstacle gauche -> tourne DROITE");
+  if (mur == 1) {                 // mur à gauche → tourne à droite
+    delay(300);
     MOTEUR_TourneDroite(VITESSE_TOURNE);
     delay(TOURNE_MS);
     MOTEUR_Stop();
-  } else if (mur == 2) {
-    // Obstacle à DROITE -> pivote à GAUCHE
-    Serial.println("Obstacle droite -> tourne GAUCHE");
+  } else if (mur == 2) {          // mur à droite → tourne à gauche
+    delay(300);
     MOTEUR_TourneGauche(VITESSE_TOURNE);
     delay(TOURNE_MS);
     MOTEUR_Stop();
-  } else {
-    // mur == 3 : les deux -> recule un peu et tourne (U-turn léger)
-    Serial.println("Mur en face -> recule + demi-tour");
+  } else if (mur == 3) {          // murs des deux côtés → recule puis tourne
+    delay(300);
     reculer_ms(RECULE_MS);
     MOTEUR_TourneGauche(VITESSE_TOURNE);
-    delay(TOURNE_MS + 250); // un peu plus long pour demi-tour
+    delay(TOURNE_MS + 250);
     MOTEUR_Stop();
   }
 
-  // 4) Petite pause pour laisser retomber les capteurs et repartir
-  delay(100);
-  // -> la loop() recommence: avance PID à nouveau
+  delay(500);
 }

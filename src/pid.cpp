@@ -1,53 +1,68 @@
 #include <LibRobus.h>
 #include "moteur.h"
-#include "pid.h"
 #include "capteur.h"
+#include "pid.h"
 
+// Gains PID et limites
 static const float KP = 0.12f;
 static const float KI = 0.0008f;
 static const float KD = 0.02f;
-static const float SORTIE_MAX   = 0.25;
-static const float INTEGRAL_MAX = 2000.0f;
+static const float SORTIE_MAX   = 0.35f;     // limite de la correction envoyée aux moteurs
+static const float INTEGRAL_MAX = 2000.0f;   // évite l’emballement de l’intégrale
 
-static inline float clamp(float x, float a, float b) {
-  if (x < a) return a;
-  if (x > b) return b;
+// Contraint x à [minVal, maxVal]
+static inline float limiter(float x, float minVal, float maxVal) {
+  if (x < minVal) return minVal;
+  if (x > maxVal) return maxVal;
   return x;
 }
 
 void PID_AvanceDroit(float vitesse_base, long distance_ticks) {
+  // Remise à zéro des encodeurs
   ENCODER_Reset(LEFT);
   ENCODER_Reset(RIGHT);
 
-  float e = 0, ePrev = 0, sumE = 0;
-  unsigned long tPrev = micros();
+  float erreur = 0.0f;
+  float erreurPrecedente = 0.0f;
+  float sommeErreur = 0.0f;
+
+  unsigned long tempsPrecedent_us = micros();
 
   while (true) {
-    long L = ENCODER_Read(LEFT);
-    long R = ENCODER_Read(RIGHT);
-    long mean = (L + R) / 2;
-    if (mean >= distance_ticks) break;
+    // Avancement atteint ?
+    long ticksGauche = ENCODER_Read(LEFT);
+    long ticksDroite = ENCODER_Read(RIGHT);
+    long ticksMoyens = (ticksGauche + ticksDroite) / 2;
+    if (ticksMoyens >= distance_ticks) break;
 
-    // Stop si un IR voit un mur
+    // Arrêt sécurité si un IR voit un mur (adapter si ta fonction s’appelle CAPTEUR_DetecterMur())
     if (Find_Mur() != 0) break;
 
-    e = float(L - R);
-    unsigned long tNow = micros();
-    float dt = (tNow - tPrev) / 1e6f;
-    if (dt < 1e-4f) dt = 1e-4f;
-    tPrev = tNow;
+    // Erreur = différence de ticks (si gauche avance plus que droite → corriger)
+    erreur = (float)(ticksGauche - ticksDroite);
 
-    sumE += e * dt;
-    sumE = clamp(sumE, -INTEGRAL_MAX, INTEGRAL_MAX);
+    // Delta temps (en secondes)
+    unsigned long t_now = micros();
+    float dt = (t_now - tempsPrecedent_us) / 1e6f;
+    if (dt < 1e-4f) dt = 1e-4f;  // évite la division par ~0
+    tempsPrecedent_us = t_now;
 
-    float d = (e - ePrev) / dt;
-    ePrev = e;
+    // Intégrale limitée
+    sommeErreur += erreur * dt;
+    sommeErreur = limiter(sommeErreur, -INTEGRAL_MAX, INTEGRAL_MAX);
 
-    float corr = KP * e + KI * sumE + KD * d;
-    corr = clamp(corr, -SORTIE_MAX, SORTIE_MAX);
+    // Dérivée
+    float derivee = (erreur - erreurPrecedente) / dt;
+    erreurPrecedente = erreur;
 
-    MOTEUR_Drive(vitesse_base, corr);
-    delay(5);
+    // Sortie PID limitée
+    float correction = KP * erreur + KI * sommeErreur + KD * derivee;
+    correction = limiter(correction, -SORTIE_MAX, SORTIE_MAX);
+
+    // Applique la correction gauche/droite autour de la vitesse de base
+    MOTEUR_Drive(vitesse_base, correction);
+
+    delay(5); // petite pause pour laisser le temps au système
   }
 
   MOTEUR_Stop();

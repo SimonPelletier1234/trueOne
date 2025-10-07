@@ -1,28 +1,37 @@
 #include "capteur.h"
 
-void CAPTEUR_Init() {
-  // Pull-up interne -> HIGH au repos, LOW quand le module tire à la masse
-  pinMode(PIN_IR_GAUCHE, INPUT_PULLUP);
-  pinMode(PIN_IR_DROITE, INPUT_PULLUP);
+void CAPTEUR_Init(void) {
+  // Active les résistances internes et prépare les entrées
+  pinMode(PIN_IR_VERTE, INPUT_PULLUP);
+  pinMode(PIN_IR_ROUGE, INPUT_PULLUP);
 }
 
-static inline bool pinDetecte(uint8_t pin) {
-  int v = digitalRead(pin);
+// Retourne vrai si le capteur branché sur "broche" détecte un obstacle
+static inline bool capteurDetecte(uint8_t broche) {
+  int lecture = digitalRead(broche);
 #if IR_ACTIVE_LOW
-  return v == LOW;   // LOW = détection (ton cas)
+  return (lecture == LOW);
 #else
-  return v == HIGH;  // (non utilisé ici)
+  return (lecture == HIGH);
 #endif
 }
 
-bool CAPTEUR_GaucheDetecte() { return pinDetecte(PIN_IR_GAUCHE); }
-bool CAPTEUR_DroiteDetecte() { return pinDetecte(PIN_IR_DROITE); }
+bool CAPTEUR_GaucheDetecte(void) {
+  return capteurDetecte(PIN_IR_VERTE);
+}
 
-int Find_Mur() {
-  bool g = CAPTEUR_GaucheDetecte();
-  bool d = CAPTEUR_DroiteDetecte();
-  if (g && d) return 3;
-  if (g && !d) return 1;
-  if (!g && d) return 2;
+bool CAPTEUR_DroiteDetecte(void) {
+  return capteurDetecte(PIN_IR_ROUGE);
+}
+
+// Retourne un code selon l’état des capteurs
+// 0 = rien, 1 = gauche, 2 = droite, 3 = les deux
+int Find_Mur(void) {
+  bool gauche = CAPTEUR_GaucheDetecte();
+  bool droite = CAPTEUR_DroiteDetecte();
+
+  if (gauche && droite) return 3;
+  if (gauche) return 1;
+  if (droite) return 2;
   return 0;
 }
